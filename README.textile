@@ -1,0 +1,4 @@
+h1. sofsip_ring
+
+Uses the Sofia-SIP library (http://sofia-sip.sourceforge.net/) to make a single
+call to a SIP phone, canceling as soon as the remote phone is ringing.
