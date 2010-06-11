@@ -23,6 +23,9 @@ const char *g_password = 0;
 const char *g_remote = 0;
 const char *g_proxy = 0;
 
+// State information
+bool g_phone_was_ringing = false;
+
 // Authentication
 void sip_do_auth(nua_handle_t *nh, const char *scheme,
                  const char *realm, const char *user,
@@ -128,18 +131,42 @@ void sip_r_call(int status, char const *phrase, nua_handle_t *nh,
 	
 	switch(status)
 	{
+		// Authentication needed
 		case 401:
 		case 407:
 			sip_authenticate(nh, sip, tags);
 			break;
+		
+		// Phone is ringing
 		case 180:
-		case 200:
-			printf("Phone is ringing. Canceling call...\n");
-			nua_cancel(nh, TAG_END());
+			g_phone_was_ringing = true;
 			break;
+		
+		case 486: // Busy here (recipient hit the red button)
+			printf("Recipient was busy\n");
+			// Fallthrough intended
+		case 600: // Busy everywhere
 		case 487:
 			printf("Canceled. Unregistering...\n");
 			nua_unregister(g_register_handle, TAG_END());
+			break;
+		
+		case 200: // Accepted
+			fprintf(stderr, "UGH. Recipient %s has accepted the call."
+				"This means you pay for the call!\n", g_remote);
+			nua_bye(nh, TAG_END());
+			break;
+		
+		// "Session progress", probably some forwarding going on.
+		// If the phone was already ringing, we abort now.
+		case 183:
+			if(!g_phone_was_ringing)
+				break;
+			// Fallthrough intended
+		case 181: // Redirected (mailbox)
+		case 182: // Queued
+			printf("Recipient reached. Canceling call...\n");
+			nua_cancel(nh, TAG_END());
 			break;
 	}
 }
